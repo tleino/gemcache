@@ -70,10 +70,10 @@ tofu_certval(struct tls *ctx)
 	hash = tls_peer_cert_hash(ctx);
 	if (hash == NULL)
 		errx(1, "could not make TLS cert hash");
-	if (strlcpy(cv.servername, servername, sizeof(cv.servername)) >=
+	if (snprintf(cv.servername, sizeof(cv.servername), "%s", servername) >=
 		sizeof(cv.servername))
 		errx(1, "truncated servername");
-	if (strlcpy(cv.hash, hash, sizeof(cv.hash)) >=
+	if (snprintf(cv.hash, sizeof(cv.hash), "%s", hash) >=
 		sizeof(cv.hash))
 		errx(1, "truncated hash");
 

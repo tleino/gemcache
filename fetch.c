@@ -190,7 +190,7 @@ write_line(struct tls *tclient, const char *str)
 	if ((s = malloc(newlen + 1)) == NULL)
 		err(1, "malloc");
 	
-	strlcpy(s, str, newlen);
+	snprintf(s, newlen, "%s", str);
 	s[newlen-2] = '\r';
 	s[newlen-1] = '\n';
 	s[newlen] = '\0';
