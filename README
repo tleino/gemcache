@@ -1,0 +1,16 @@
+gemcache - simple caching proxy for Gemini space
+
+Dependencies
+============
+
+On Linux:
+- LibreTLS (e.g. from https://causal.agency/libretls/)
+- OpenSSL
+
+None on OpenBSD.
+
+Configure & Install
+===================
+
+./configure ~
+make install
