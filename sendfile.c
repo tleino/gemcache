@@ -2,9 +2,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+
 void sendfile(const char *file, int fd)
 {
-	char buf[256];
+	char *line = NULL;
+	size_t sz = 0;
+	ssize_t len;
 	FILE *fp;
 
 	syslog(LOG_ERR, "serve '%s'", file);
@@ -12,12 +16,11 @@ void sendfile(const char *file, int fd)
 		syslog(LOG_ERR, "fopen: %m");
 		return;
 	}
-	while (feof(fp) == 0) {
-		buf[0] = '\0';
-		fgets(buf, sizeof(buf), fp);
-		buf[strcspn(buf, "\r\n")] = '\0';
-		write(fd, buf, strlen(buf));
-		write(fd, "\r\n", 2);
-	}
-	fclose(fp);
+	while ((len = getline(&line, &sz, fp)) != -1)
+		write(fd, line, strlen(line));
+	free(line);
+	if (ferror(fp))
+		syslog(LOG_ERR, "getline: %m");
+	else
+		fclose(fp);
 }
