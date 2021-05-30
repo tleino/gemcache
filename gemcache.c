@@ -1,4 +1,7 @@
 #include "fetch.h"
+#include "tcpbind.h"
+#include "serve.h"
+
 #include <stdlib.h>
 #include <openssl/sha.h>
 #include <string.h>
@@ -8,14 +11,40 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <libgen.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <syslog.h>
 
 static char *
-find_cache_file(const char *hash)
+hash_url(const char *url)
 {
-	char *home;
-	static char file[PATH_MAX];
-	char *path, *dn;
-	struct stat sb;
+	static char		 hstr[128];
+	unsigned char		 hash[SHA_DIGEST_LENGTH + 1];
+	char			*p;
+	int			 i;
+
+	SHA1((unsigned const char *) url, strlen(url), hash);
+	hash[SHA_DIGEST_LENGTH] = '\0';
+	p = hstr;
+	for (i = 0; i < SHA_DIGEST_LENGTH; i++) {
+		sprintf(p, "%02x", hash[i]);
+		p += 2;
+	}
+	*p = '\0';
+
+	return hstr;	
+}
+
+char *
+find_cache_file(const char *url)
+{
+	char			*home;
+	static char		 file[PATH_MAX];
+	char			*path, *dn;
+	struct stat		 sb;
+	char			*hash;
+
+	hash = hash_url(url);
 
 	home = getenv("HOME");
 	if (home == NULL)
@@ -44,40 +73,37 @@ find_cache_file(const char *hash)
 	return file;	
 }
 
+void session(int);
+
 int
 main(int argc, char *argv[])
 {
-	unsigned char hash[SHA_DIGEST_LENGTH + 1];
-	int i;
-	FILE *fp;
-	char *file;
-	char hstr[128 + 1], *p;
+	int			 sfd;
 
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s <url>\n", *argv);
-		exit(1);
+	openlog(argv[0], 0, LOG_DAEMON);
+
+	sfd = tcpbind("0.0.0.0", 1965);
+
+	for (;;) {
+		int fd, status;
+		pid_t pid;
+
+		fd = serve(sfd);
+		if (fd < 0)
+			continue;
+		if ((pid = fork()) == 0) {
+			alarm(10);	/* session expire time */
+#ifdef __OpenBSD__
+			setproctitle("session");
+#endif
+			session(fd);
+			_exit(127);
+		}
+		close(fd);
+		if (pid != -1)
+			wait(&status);
 	}
 
-	argv++;
-
-	SHA1((unsigned char *) *argv, strlen(*argv), hash);
-	hash[SHA_DIGEST_LENGTH] = '\0';
-	p = hstr;
-	for (i = 0; i < SHA_DIGEST_LENGTH; i++) {
-		sprintf(p, "%02x", hash[i]);
-		p += 2;
-	}
-	*p = '\0';
-
-	file = find_cache_file(hstr);
-	fp = fopen(file, "r");
-	if (fp == NULL) {
-		fp = fopen(file, "w");
-		fetch(*argv, fp);
-	} else {
-		printf("already available\n");
-	}
-	fclose(fp);
 
 	return 0;
 }

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <err.h>
+#include <syslog.h>
 
 static void write_line(struct tls *, const char *);
 
@@ -45,16 +46,16 @@ fetch_open(const struct url *url, int *code, char **firstline)
 			tries = 0;
 		}
 		if (tls_configure(sess->tclient, sess->tconf) == -1) {
-			warnx("%s",
+			syslog(LOG_WARNING, "%s",
 			    tls_config_error(sess->tconf));
 			return NULL;
 		}
 		if (tls_connect(sess->tclient, url->host, url->port) == -1) {
-			warnx("%s", tls_error(sess->tclient));
+			syslog(LOG_WARNING, "%s", tls_error(sess->tclient));
 			return NULL;
 		}
 		if (tls_handshake(sess->tclient) == -1) {
-			warnx("%s", tls_error(sess->tclient));
+			syslog(LOG_WARNING, "%s", tls_error(sess->tclient));
 			tls_config_insecure_noverifycert(sess->tconf);
 			if (!tries)
 				return NULL;
@@ -69,6 +70,7 @@ fetch_open(const struct url *url, int *code, char **firstline)
 		break;
 	case TOFU_INVALID:
 	default:
+		syslog(LOG_ERR, "TOFU_INVALID");
 		errx(1, "Check certificate");
 	}
 
@@ -81,7 +83,7 @@ fetch_open(const struct url *url, int *code, char **firstline)
 		if ((s = linebuf_read(sess->lb)) != NULL)
 			break;
 	if (s == NULL) {
-		warnx("couldn't read first line");
+		syslog(LOG_WARNING, "couldn't read first line");
 		return NULL;
 	}
 	p = strchr(s, ' ');
@@ -141,49 +143,36 @@ fetch(const char *s, FILE *fp)
 	char *meta;
 	struct url url;
 	char *ustr;
-	int ret;
-	char *p;
 
 	ustr = strdup(s);
-	if (ustr == NULL)
-		err(1, "strdup");
+	if (ustr == NULL) {
+		fprintf(fp, "40 cache server failed temporarily\r\n");
+		return -1;
+	}
 
-	if (url_parse(&url, ustr) == -1)
-		errx(1, "error parsing: %s", s);
-
-	if (strcmp(url.scheme, "gemini") != 0)
-		errx(1, "unsupported scheme: %s", url.scheme);
-
+	if (url_parse(&url, ustr) == -1) {
+		fprintf(fp, "50 cache server failed parsing url\r\n");
+		return -1;
+	}
+	if (strcmp(url.scheme, "gemini") != 0) {
+		fprintf(fp, "50 cache server does not support this scheme\r\n");
+		return -1;
+	}
 	sess = fetch_open(&url, &status, &meta);
-	if (sess == NULL)
-		errx(1, "couldn't connect: %s", s);
-
-	if (status >= 10 && status <= 19) {
-		errx(1, "requires input");
-	} else if (status >= 30 && status <= 39) {
-		printf("redirect %s\n", meta);
-		p = strdup(meta);
-		fetch_close(sess);
-		ret = fetch(p, fp);
-		free(p);
-		return ret;
-	} else if (status >= 40 && status <= 49) {
-		errx(1, "temp failure: %s", meta);
-	} else if (status >= 50 && status <= 59) {
-		errx(1, "permanent failure: %s", meta);
-	} else if (status >= 60 && status <= 69) {
-		errx(1, "client certificate required");
-	} else if (status < 20 || status > 29) {
-		errx(1, "unsupported status: %d", status);
+	if (sess == NULL) {
+		fprintf(fp, "40 cache server couldn't connect host\r\n");
+		return -1;
 	}
 
-	if (strncmp(meta, "text/gemini", strlen("text/gemini")) == 0 ||
-	    strncmp(meta, "text/plain", strlen("text/plain")) == 0)
-		fetch_linestream(sess, linecb, fp);
-	else {
-		errx(1, "unsupported type: %s", meta);
+	if (!(strncmp(meta, "text/gemini", strlen("text/gemini")) == 0 ||
+	    strncmp(meta, "text/plain", strlen("text/plain")) == 0)) {
+		fprintf(fp, "40 cache server does not support this type\r\n");
+		return -1;
 	}
 
+	fprintf(fp, "%02d %s\r\n", status, meta);
+
+	fetch_linestream(sess, linecb, fp);
 	fetch_close(sess);
 	return 0;
 }

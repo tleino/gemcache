@@ -11,7 +11,8 @@ mandir = $(datarootdir)/man
 INSTALL ?= install
 INSTALLFLAGS ?= -D
 
-SRCS=tofu.c url.c fetch.c linebuf.c gemcache.c
+SRCS=sendfile.c session.c serve.c tcpbind.c tofu.c url.c fetch.c \
+	linebuf.c gemcache.c
 PROG=gemcache
 MAN=gemcache.1
 
@@ -38,7 +39,11 @@ uninstall:
 	rm -f $(DESTDIR)$(mandir)/man1/$(MAN)
 
 fetch.o: fetch.c fetch.h url.h tofu.h linebuf.h
-gemcache.o: gemcache.c
+gemcache.o: gemcache.c fetch.h tcpbind.h serve.h
 linebuf.o: linebuf.c linebuf.h
+sendfile.o: sendfile.c
+serve.o: serve.c
+session.o: session.c fetch.h
+tcpbind.o: tcpbind.c
 tofu.o: tofu.c tofu.h
 url.o: url.c url.h
