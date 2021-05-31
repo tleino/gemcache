@@ -164,7 +164,8 @@ fetch(const char *s, FILE *fp)
 		return -1;
 	}
 
-	if (!(strncmp(meta, "text/gemini", strlen("text/gemini")) == 0 ||
+	if (status >= 20 && status <= 29 &&
+	    !(strncmp(meta, "text/gemini", strlen("text/gemini")) == 0 ||
 	    strncmp(meta, "text/plain", strlen("text/plain")) == 0)) {
 		fprintf(fp, "40 cache server does not support this type\r\n");
 		return -1;
