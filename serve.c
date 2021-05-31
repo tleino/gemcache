@@ -8,7 +8,7 @@ int
 serve(int sfd)
 {
 	int fd;
-	struct sockaddr_in a;
+	struct sockaddr_in a = { 0 };
 	socklen_t sz = sizeof(a);
 
 	fd = accept(sfd, (struct sockaddr *) &a, &sz);
