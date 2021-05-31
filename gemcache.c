@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <syslog.h>
+#include <sys/socket.h>
 
 static char *
 hash_url(const char *url)
@@ -92,18 +93,21 @@ main(int argc, char *argv[])
 		if (fd < 0)
 			continue;
 		if ((pid = fork()) == 0) {
+#if 0
 			alarm(10);	/* session expire time */
+#endif
 #ifdef __OpenBSD__
 			setproctitle("session");
 #endif
 			session(fd);
-			_exit(127);
+			shutdown(fd, SHUT_RDWR);
+			close(fd);
+			_exit(0);
 		}
 		close(fd);
 		if (pid != -1)
 			wait(&status);
 	}
-
 
 	return 0;
 }
